@@ -55,7 +55,7 @@ def Plot_Larmor(b,a_angle,save=False,norm_factor=1):
     fig = plt.figure()
     ax = fig.add_subplot(111,projection='3d')
     #rotate by 85deg around y axis
-    ax.view_init(5, 90)
+    ax.view_init(5, 0)
     ax.set_xlim([-1,1])
     ax.set_ylim([-1,1])
     ax.set_zlim([-1,1])
@@ -69,7 +69,7 @@ def Plot_Larmor(b,a_angle,save=False,norm_factor=1):
     ax.set_zlabel('z')
     
     if save:
-        plt.savefig(f'Plots90/Larmor_{int(100*a_angle)}.png',dpi=300)
+        plt.savefig(f'Plots/Larmor_{int(100*a_angle)}.png',dpi=300)
     else:
         plt.show()
     plt.close()
@@ -95,7 +95,7 @@ for a in np.linspace(0,2*np.pi,80):
 
 for a in np.linspace(0,2*np.pi,80):
     Plot_Larmor(b,a,save=True,norm_factor=max_norm_factor)
-Plot_Larmor(b,np.pi/4)
+# Plot_Larmor(b,np.pi/4)
 
 
 
