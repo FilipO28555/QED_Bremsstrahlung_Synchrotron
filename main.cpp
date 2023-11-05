@@ -78,14 +78,14 @@ public:
 
 double c = 200; //[px/s]
 double E_mag = 1;
-double stddevTheta = 0.5; //standard deviation of angle distribution
-double velToFreq = 20; // 1px/s -> 100Hz. electron moveing at 1px/s will most likely emit photon with freq 100Hz
+double stddevTheta = 0.7; //standard deviation of angle distribution [rad]
+double velToFreq = 50; // 1px/s -> 100Hz. electron moveing at 1px/s will most likely emit photon with freq 100Hz
 double stddev = 1; //standard deviation of freq distribution
 double h = 0.01; //Planck constant [J*s] = [kg*px^2/s]
 double m_e = 1; //electron mass [kg]
 
 vd3d E(vd3d pos) {
-	return vd3d(-E_mag, 0, 0);
+	return vd3d(E_mag, 0, 0);
 }
 
 double scatter_prop(vd3d E, vd3d p) {
@@ -105,6 +105,14 @@ double propFreq(double freq,double vel) {
 }
 const double maxPropfreq = 0.57; //max propability of emitting photon
 
+//propability density function of frequency for a synchrotron radiation?
+double propFreqB(double freq, double vel, double B, double theta) {
+	double meanFreq = velToFreq / (1 - (vel * vel) / (c * c)) * B * sin(theta);
+
+	double x = (freq - meanFreq);// (x-mean)
+	return exp(-(x * x / stddev)) / sqrt(M_PI); //normalized to 1
+}
+const double maxPropfreqB = 0.57; //max propability of emitting photon
 
 struct photon;
 vector<photon> photons;
@@ -188,6 +196,7 @@ struct particle {
 	vd3d pos;
 	vd3d vel;
 	double mass = m_e;
+	double charge = -100;
 
 	particle(vd3d Pos, vd3d Vel) {
 		pos = Pos;
@@ -199,7 +208,7 @@ struct particle {
 		//1) check if scatter
 		double rand = MTrand(mt);
 		//print(scatter_prop(E(pos), vel));
-		if (rand < scatter_prop(E(pos), vel)) {
+		if (rand < scatter_prop(E(pos), vel*charge)) {
 			//scatter
 			//1) choose new direction
 			double theta = RandomFromDist(propTheta, -M_PI, M_PI, maxPropTheta);
@@ -222,9 +231,12 @@ struct particle {
 			vel = (vel*mass - p) / mass;
 		}
 
+
+		//Calculate the Lorentz force
+		//vd3d F = E(pos) * charge;
+		//vel += F / mass * dt;
 		//4) update pos
 		pos += vel * dt;
-		
 
 	}
 
@@ -415,21 +427,28 @@ public:
 
 		}
 
-		
-		 if (GetKey(olc::Key::R).bPressed ) {
-			 int parNo = 1;
-			 //Clear vectors 
-			 particles.clear();
-			 photons.clear();
-			 //Clear detector
-			 for (int i = 0; i < det.pos.size(); i++) {
-				 det.energy[i] = 0;
-			 }
-			 //Create new particles
-			 for (int i = 0; i < parNo; i++) {
-				 particles.push_back(particle(vd3d(SIZEX / 7, SIZEY / 2 + (i- parNo/2) * parNo/2, 0), vd3d(50, 0, 0)));
-			 }
-		 }
+
+		if (GetKey(olc::Key::R).bPressed) {
+			int parNo = 1;
+			//Clear vectors 
+			particles.clear();
+			photons.clear();
+			//Clear detector
+			for (int i = 0; i < det.pos.size(); i++) {
+				det.energy[i] = 0;
+			}
+			//Create new particles
+			for (int i = 0; i < parNo; i++) {
+				particles.push_back(particle(vd3d(SIZEX / 7, SIZEY / 2 + (i - parNo / 2) * parNo / 2, 0), vd3d(50, 0, 0)));
+			}
+		}
+		if (GetKey(olc::Key::N).bPressed) {
+			int parNo = 10;
+			//Create new particles
+			for (int i = 0; i < parNo; i++) {
+				particles.push_back(particle(vd3d(SIZEX / 7, SIZEY / 2 + (i - parNo / 2) * parNo / 2, 0), vd3d(50, 0, 0)));
+			}
+		}
 
 
 		return true;
