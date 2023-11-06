@@ -93,13 +93,25 @@ for a in np.linspace(0,2*np.pi,80):
     if get_norm_factor(b,a) > max_norm_factor:
         max_norm_factor = get_norm_factor(b,a)
 
-for a in np.linspace(0,2*np.pi,80):
-    Plot_Larmor(b,a,save=True,norm_factor=max_norm_factor)
+# for a in np.linspace(0,2*np.pi,80):
+#     Plot_Larmor(b,a,save=True,norm_factor=max_norm_factor)
 # Plot_Larmor(b,np.pi/4)
 
 
 
-
+def makeGif(folder = 'Plots'):
+    import imageio
+    import os
+    images = []
+    files = os.listdir(folder)
+    #sort files by number
+    files = sorted(files, key=lambda x: int(x.split('_')[1].split('.')[0]))
+    for filename in files:
+        images.append(imageio.imread(f'{folder}/{filename}'))
+    imageio.mimsave('Larmor.gif',images,fps=10, loop=0)
+    
+makeGif("Plots")
+    
 
 
 
