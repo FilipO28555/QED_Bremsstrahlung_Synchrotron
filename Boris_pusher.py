@@ -41,14 +41,14 @@ El = a0*m_e*w*c/q #Electric field strength in V/m
 
                     #Time and space
 Tperiod = 2*np.pi/w
-substeps = 6
-dt = Tperiod/2 # 10 steps per period
+substeps = 1
+dt = Tperiod/100 # 10 steps per period
 dt /= substeps #change dt
 
 kappa = w/c/2/np.pi # wave number
 scale = 1/kappa # SIZE pixels = scale*meters
-scaleX = scale*100
-scaleY = scale*100
+scaleX = scale*10
+scaleY = scale*10
 
 print("scale=",scale, "meters")
 print("dt = {:e}".format(dt))
@@ -79,8 +79,10 @@ def getEandB(x):
     return vectorE, vectorB
 
 energyAll = []
-def plotEnergy():            
+def plotEnergy(save=False,returnImg=False):                    
     energy = np.concatenate(energyAll)
+    if len(energyAll) == 0:
+        energy = [0]
     # histogram of the generated photons
     # bins = np.logspace(-3, 0, int(len(energy)/500))
     # bins = np.linspace(0, 1, int(len(energy)))
@@ -91,7 +93,20 @@ def plotEnergy():
     plt.ylabel("count")
     plt.xscale('log')
     plt.yscale('log')
-    plt.show()
+    
+    if returnImg:
+        fig = plt.gcf()
+        # Convert the Matplotlib figure to an RGB image
+        fig.canvas.draw()
+        data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        plt.close()
+        return data
+    
+    if save:
+        plt.savefig("Energy/Energy_"+str(time)+".png")
+    else:
+        plt.show()
     plt.close()
 
 def getGamma(velocities):
@@ -152,17 +167,14 @@ def update_Boris(positions,velocities,dt):
     
 # Create some balls
 # n_balls = 1_000_000
-n_balls = 10_000
-maxBalls = 10_000
+n_balls = 50_000
+maxBalls = 50_000
 displayBalls = n_balls if n_balls<maxBalls else maxBalls
 
 
 def reset(gamma):
-    # positions = ((torch.rand(n_balls,3,dtype=torch.float64, device='cuda')/2 + 0.25)+Tens([0,-0.15,0]))*Tens([scaleX,scaleY*3,0])
-    positions = (torch.zeros(n_balls,3,dtype=torch.float64, device='cuda') + 1)*Tens([scaleX*0.5,scaleY*0.9,0])
-    print("Particle initially at: ", positions[0].cpu().numpy())
-    print("E field at initial coordinates: ", getEandB(positions)[0][0].cpu().numpy())
-    print("B field at initial coordinates: ", getEandB(positions)[1][0].cpu().numpy())
+    positions = ((torch.rand(n_balls,3,dtype=torch.float64, device='cuda')/2 + 0.25)+Tens([0,-0.15,0]))*Tens([scaleX,scaleY*3,0])
+    # positions = (torch.zeros(n_balls,3,dtype=torch.float64, device='cuda') + 1)*Tens([scaleX*0.5,scaleY*0.9,0])
     velocities = torch.zeros_like(positions)
     #initial velocity
     init_vel = c * np.sqrt(1 - 1 / gamma**2)
@@ -173,6 +185,9 @@ def reset(gamma):
 
 positions, velocities = reset(init_gamma)
 
+print("Particle initially at: ", positions[0].cpu().numpy())
+print("E field at initial coordinates: ", getEandB(positions)[0][0].cpu().numpy())
+print("B field at initial coordinates: ", getEandB(positions)[1][0].cpu().numpy())
 # Simulation loop
 
 SIZE = 900
@@ -225,6 +240,18 @@ def speed_test(minBalls,maxBalls,steps_num,averadge_of = 100):
 
 # exit()
 
+def draw_points(pos,img,color):
+    # Apply mask
+    mask_x = pos[:, 0].ge(0) & pos[:, 0].lt(SIZE)
+    mask_y = pos[:, 1].ge(0) & pos[:, 1].lt(SIZE)
+    pos = pos[mask_x & mask_y]
+    # Prepare indices for advanced indexing
+    rows = pos[:, 1]
+    cols = pos[:, 0]
+    # Advanced indexing for batched addition
+    img[rows, cols] += color
+    return img, pos, (mask_x & mask_y)
+
 def make_gif(images, fname,duration = 0.02,repetitions = 0):
     import imageio
     # duration is the duration of each frame in seconds
@@ -236,7 +263,7 @@ gif_images = []
 while True:
     # FPS counter
     if iter%10==0:
-        cv2.setWindowTitle('image', "fps = {:.0f} \t\t".format(fps/10)+"mean time from last frame = {:.0f} ms".format(1/fps*10000)+"  simulation time = {:.3e} ms".format(time))
+        cv2.setWindowTitle('image', "fps = {:.0f} \t\t".format(fps/10)+"mean time from last frame = {:.0f} ms".format(1/fps*10000)+"  simulation time = {:.3e} s".format(time))
         # print("fps = {:.0f} \t\t".format(fps/10)+"mean time from last frame = {:.0f} ms".format(1/fps*10000))
         fps = 0
     else:
@@ -248,51 +275,62 @@ while True:
     for _ in range(substeps):
         positions, velocities =  update_Boris(positions,velocities,dt)
         time += dt
-        if time > 3.8e-13:
+        if time > 3.8e-14:
             time = 0
             gammas = getGamma(velocities)
             print("time = ", time, "mean error gamma = ", (gammas-init_gamma).mean().cpu().numpy())
             positions, velocities = reset(init_gamma)
+            # plotEnergy()
             if gifQ:
-                make_gif(gif_images, "boris.gif")
+                make_gif(gif_images, "boris_scattered_init.gif")
                 exit()
             
-    
-    # Visualization using OpenCV
-    alpha = 1
-    img = np.zeros((SIZE,SIZE,4), np.uint8) # Create a black image
-    pos = (positions[:displayBalls] * SIZE / Tens([scaleX,scaleY,1])).type(torch.int32).cpu().numpy()
-    
-        # show Electric field
-    E,B = getEandB(positions[:displayBalls])
+    # Visualization but drawing on a tensor in pytorch
+    # Create the image tensor on GPU
+    img = torch.zeros((SIZE, SIZE, 3), dtype=torch.uint8, device='cuda')
+    pos = (positions[:maxBalls, :2] * SIZE / torch.tensor([scaleX, scaleY], device='cuda')).type(torch.int32)
+    col = torch.tensor([[0, 0, 200]], dtype=torch.uint8, device='cuda')
+    img, pos, mask = draw_points(pos,img,col)
+
+    #     # show Electric field
+    E,B = getEandB(positions[:maxBalls][mask])
     # print(E)
-    E = (E*SIZE/El/20).type(torch.int32).cpu().numpy()
-    B = (B*c*SIZE/El/40).type(torch.int32).cpu().numpy()
-    for e,b,p in zip(E,B,pos):
-        cv2.line(img, (p[0], p[1]), (p[0]+e[0], p[1]+e[1]), (255,0,0, 255*alpha), 1) # Ex
-        cv2.line(img, (p[0], p[1]), (p[0]+b[0], p[1]+b[2]), (0,255,0, 255*alpha), 1) # Bz
-     
+    E = (E/El).type(torch.float32)
+    B = (B*c/El).type(torch.float32)
+    EB = torch.cat((E,B),dim=0)
     
-    for position in pos:
-        cv2.circle(img, (position[0], position[1]), 1, (0,0,255,255*alpha), -1)
-   
-    # Convert the original image to RGBA
-    img_bgr = np.zeros((SIZE, SIZE, 3), np.uint8)  # Your original BGR image
-    img_original_rgba = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2BGRA)
-    # Blend the RGBA image with the original image
-    img = cv2.addWeighted(img_original_rgba, 1, img, alpha, 0)
+    #Draw E and B
+    lines = torch.zeros((pos.shape[0]*2,40,2), dtype=torch.float32, device='cuda')
+    lines[:,0,:] = torch.cat((pos[:],pos[:]),dim=0)
     
-    cv2.imshow('image', img)
+    for i in range(1,40):
+        lines[:,i,0] = lines[:,i-1,0] + EB[:,0]
+        lines[:,i,1] = lines[:,i-1,1] + EB[:,2]
+    lines = lines.type(torch.int32)
+    # reshape lines to be a vector of 2d points
+    lines = lines.reshape((-1, 2))
+    # Draw E
+    col = torch.tensor([[0, 200, 0]], dtype=torch.uint8, device='cuda')
+    img, _, _ = draw_points(lines[:40*pos.shape[0]],img,col)
+    # Draw B
+    col = torch.tensor([[200, 0, 0]], dtype=torch.uint8, device='cuda')
+    img, _, _ = draw_points(lines[40*pos.shape[0]:],img,col)
+    
+    img = img.cpu().numpy()
+    
     
     if gifQ:
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # img = plotEnergy(returnImg=True)
         gif_images.append(img)    
+    
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    cv2.imshow('image', img)
     
     # if R key pressed - reset
     if cv2.waitKey(1) & 0xFF == ord('r'):
         time = 0
         positions, velocities = reset(init_gamma)
-    if cv2.waitKey(1) & 0xFF == ord('p'):
+    if cv2.waitKey(1) & 0xFF == ord('p') and SynchrotronQ:
         plotEnergy()
     
 
