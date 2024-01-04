@@ -46,8 +46,11 @@ CUDAQ = True
 
 
 def F1(z_q):
-    integral = quad(lambda x: kv(5/3, x), z_q, np.inf)[0]
-    return z_q*integral
+    if z_q > 2.8e-6:
+        integral = quad(lambda x: kv(5/3, x), z_q, np.inf)[0]
+        return z_q*integral
+    else:
+        return 2.15* z_q**(1/3)
 
     integral = 0
     for i in range(1000):

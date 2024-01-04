@@ -52,7 +52,7 @@ scaleY = scale*100
 
 print("scale=",scale, "meters")
 print("dt = {:e}".format(dt))
-
+print("envelope sigma = {:e}".format(scaleY/12))
 
 def envelope(x):
     global time
@@ -61,7 +61,7 @@ def envelope(x):
     # sig = 1e-6
     x0 = time*c
     y0 = scaleX/2
-    return torch.exp(-(x[:,1]-x0)**2/2/sig**2) * torch.exp(-(x[:,0]-y0)**2/sig**2)
+    return torch.exp(-(x[:,1]-x0)**2/2/sig**2) # * torch.exp(-(x[:,0]-y0)**2/sig**2)
 
     
 def getEandB(x):
@@ -99,9 +99,6 @@ def getGamma(velocities):
     return 1/torch.sqrt(1-(vmag/c)**2)
 
 def update_Boris(positions,velocities,dt):
-    # stream1 = Stream(device=torch.device('cuda'))
-    # stream2 = Stream(device=torch.device('cuda'))
-    
     
     E,B = getEandB(positions)
 
@@ -161,8 +158,11 @@ displayBalls = n_balls if n_balls<maxBalls else maxBalls
 
 
 def reset(gamma):
-    positions = ((torch.rand(n_balls,3,dtype=torch.float64, device='cuda')/2 + 0.25)+Tens([0,-0.15,0]))*Tens([scaleX,scaleY*3,0])
-    # positions = (torch.zeros(n_balls,3,dtype=torch.float64, device='cuda')/2 + 0.5)*Tens([scaleX,scaleY*0.5,0])
+    # positions = ((torch.rand(n_balls,3,dtype=torch.float64, device='cuda')/2 + 0.25)+Tens([0,-0.15,0]))*Tens([scaleX,scaleY*3,0])
+    positions = (torch.zeros(n_balls,3,dtype=torch.float64, device='cuda') + 1)*Tens([scaleX*0.5,scaleY*0.9,0])
+    print("Particle initially at: ", positions[0].cpu().numpy())
+    print("E field at initial coordinates: ", getEandB(positions)[0][0].cpu().numpy())
+    print("B field at initial coordinates: ", getEandB(positions)[1][0].cpu().numpy())
     velocities = torch.zeros_like(positions)
     #initial velocity
     init_vel = c * np.sqrt(1 - 1 / gamma**2)
@@ -225,7 +225,14 @@ def speed_test(minBalls,maxBalls,steps_num,averadge_of = 100):
 
 # exit()
 
-    
+def make_gif(images, fname,duration = 0.02,repetitions = 0):
+    import imageio
+    # duration is the duration of each frame in seconds
+    imageio.mimsave(fname, images, duration=duration, loop=repetitions)
+    print("gif saved to: ", fname)
+
+gifQ = True
+gif_images = []
 while True:
     # FPS counter
     if iter%10==0:
@@ -246,7 +253,9 @@ while True:
             gammas = getGamma(velocities)
             print("time = ", time, "mean error gamma = ", (gammas-init_gamma).mean().cpu().numpy())
             positions, velocities = reset(init_gamma)
-            # exit()
+            if gifQ:
+                make_gif(gif_images, "boris.gif")
+                exit()
             
     
     # Visualization using OpenCV
@@ -274,10 +283,11 @@ while True:
     img = cv2.addWeighted(img_original_rgba, 1, img, alpha, 0)
     
     cv2.imshow('image', img)
-    # print("hello world")
     
+    if gifQ:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        gif_images.append(img)    
     
-    # cv2.waitKey(1)
     # if R key pressed - reset
     if cv2.waitKey(1) & 0xFF == ord('r'):
         time = 0
